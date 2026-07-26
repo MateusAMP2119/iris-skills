@@ -1,6 +1,6 @@
 ---
 name: pipeline-authoring
-description: Author iris pipelines and lanes under the turn protocol — declaration shape, the fetch frame, script-owned pacing (the engine holds NO time), polite scraping tiers, and provenance. Use when writing or reviewing a pipeline script, a source-declaring scraper, an iris-declare.yaml, or a lane composer.
+description: Author iris pipelines and lanes — the turn protocol, the fetch frame, script-owned pacing (the engine holds NO time), declaration shape, lane composers and ordering, folder surfaces, and provenance. Use when writing or reviewing a pipeline script, a source-declaring scraper, an iris-declare.yaml, a lane composer, or when deciding how to split/compose lanes and plugin lifetimes.
 ---
 
 # Authoring iris pipelines and lanes
@@ -22,6 +22,8 @@ The engine's side of the deal:
 - A **gated pipeline** (`depends_on`) turns only after its upstream produced.
   That's gating, not parking — no pacing needed downstream, the upstream's
   rhythm cascades.
+- A **hung run holds its lane forever**. No engine timeout, by design; only
+  an operator cancel frees it. Other lanes keep dispatching.
 
 Consequence: **a script that answers instantly-quiet in a loop builds a
 CPU fire.** If your turn can end quiet (usually: nothing new), sleep BEFORE
@@ -72,46 +74,16 @@ First turn of a session: fetch immediately (catch up on wake), sleep on the
 later ones. Sleeping mid-turn is legal and free — the engine has no run
 timeout by design; the lane simply waits.
 
-## Choosing a pace (scraping etiquette)
-
-Blocking is about REQUEST RATE, not bytes — a 304 counts like a full
-download to a rate limiter. Pick the pace from what the site itself says,
-in this order:
-
-1. **HTTP freshness headers** on the source answer (the engine obeys
-   validators; your pace should match the origin's `cache-control: max-age`
-   when it sends one — big outlets do, usually 30–60s for news sitemaps).
-2. **The feed's own declared rhythm**: RSS `<ttl>` (minutes) or WordPress's
-   `<sy:updatePeriod>`/`<sy:updateFrequency>`. Boilerplate-prone (a weekly
-   paper often claims "hourly") but errs toward harmless over-checking.
-3. **Nothing declared** → pick a human-plausible reader pace: 1–5 min for a
-   busy site, 15–60 min for a small/local one. Sub-minute sustained polling
-   of one origin from one IP reads as a bot.
-
-Never poll faster than the origin's CDN cache anyway — you'd get the same
-cached bytes and burn goodwill for nothing.
-
-## Finding the right endpoint for a news source
-
-Never scrape the homepage first. Probe in this order (one curl each):
-
-1. `robots.txt` → `Sitemap:` lines. A **news sitemap** (Google News
-   requirement, near-universal for professional outlets) updates within
-   ~seconds-minutes of publish and is structured XML: url + publication_date
-   + title. Best source, tolerated by design.
-2. Common paths when robots hides them: `/sitemap/news.xml`,
-   `/sitemaps/news.xml`, `/sitemap_news.xml`, `/feed/news/sitemap.xml`.
-3. **RSS/Atom**: `/feed/` (WordPress default), `/rss`. Small, parse-friendly,
-   ETag-capable. The standard for small sites.
-4. Homepage HTML: last resort — heavy, JS-rendered, bot-walled (DataDome,
-   Cloudflare). Expect 403s and captchas.
+Choosing the number in `CHECK_EVERY_SECONDS`, and finding an endpoint worth
+fetching at all, are their own subject →
+**[references/scraping.md](references/scraping.md)**.
 
 ## Declaration shape (iris-declare.yaml)
 
 ```yaml
-name: sic_feed
-run: [python3, main.py]
-lane: news                 # omit → its own lane
+name: sic_feed             # required; must match the folder name
+run: [python3, main.py]    # required; the exec vector
+lane: news                 # the lane this pipeline joins
 logs: {split: true, stamp: true}   # declare the recording contract
 source:
   http: https://sicnoticias.pt/sitemap/news.xml
@@ -120,12 +92,39 @@ writes:
     fields: [url, published_at, title, site]
 ```
 
+Eleven fields, no more: `name, run, env, env_file, lane, logs, plugins,
+source, reads, writes, depends_on`. An unknown key is rejected at apply.
+
 - `source.http` is the ONLY source field — no interval exists in YAML, ever.
 - Declare exact write fields; a row outside them dead-letters the turn.
 - Downstream stages use `depends_on: [sic_feed]` + `reads:` — they inherit
-  the upstream's rhythm, no pacing of their own.
-- A lane composer (`lane:` + `order:`) serializes members; keep one site's
-  fetch→transform chain in one lane.
+  the upstream's rhythm, no pacing of their own. `depends_on` is a data gate,
+  independent of lanes: it works across lanes and never reorders a walk.
+- `plugins:` binds alias → `name@version` plus a lifetime (`run` is the
+  default and the only one that executes today; `lane` and `resident` parse).
+
+### Workspace layout
+
+```
+pipelines/<lane>/iris-declare.yaml       ← the lane composer
+pipelines/<lane>/<pipeline>/             ← one declaration + its script
+schemas/<schema>/<table>/                ← table schemas
+```
+
+Folder position is itself a declaration: the lane folder a pipeline sits in
+names its lane, and must agree with any inline `lane:`.
+
+## Lanes
+
+A lane is the unit of parallelism and serialization: **one goroutine per
+lane, members walked serially in composer order, distinct lanes in parallel
+with no engine cap.** Order sequences; it never gates — a dead-lettered
+member does not stop its lane's walk.
+
+Keep one site's fetch→transform chain in one lane. Composer shape, the 2+
+interlock, folder surfaces, and the single-member trap (a `lane:` with one
+member is nominal — its pipeline lands in the shared serial queue, not a
+lane of its own) → **[references/lanes.md](references/lanes.md)**.
 
 ## Provenance
 

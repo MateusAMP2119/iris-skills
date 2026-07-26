@@ -10,7 +10,11 @@ matches the task at hand.
 
 | Skill | What it covers |
 | --- | --- |
-| [`pipeline-authoring`](pipeline-authoring/SKILL.md) | Writing pipelines and lanes under the turn protocol — declaration shape, the fetch frame, script-owned pacing, scraping etiquette, provenance. |
+| [`pipeline-authoring`](pipeline-authoring/SKILL.md) | Writing pipelines and lanes under the turn protocol — the no-time law, frame vocabulary, the fetch frame, declaration shape, provenance. References: [`lanes.md`](pipeline-authoring/references/lanes.md) (composers, order, the 2+ interlock, folder surfaces, lifetimes), [`scraping.md`](pipeline-authoring/references/scraping.md) (pace, backoff, endpoint probing). |
+
+Skills use progressive disclosure: `SKILL.md` holds what is true for every
+case, `references/` holds the per-case detail, read only when the task is
+that case.
 
 ## Install
 
