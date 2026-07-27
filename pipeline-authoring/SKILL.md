@@ -74,9 +74,10 @@ First turn of a session: fetch immediately (catch up on wake), sleep on the
 later ones. Sleeping mid-turn is legal and free — the engine has no run
 timeout by design; the lane simply waits.
 
-Choosing the number in `CHECK_EVERY_SECONDS`, and finding an endpoint worth
-fetching at all, are their own subject →
-**[references/scraping.md](references/scraping.md)**.
+That sketch is the whole shape of a script: **one flat function, one job, no
+nested definitions**. Choosing the number in `CHECK_EVERY_SECONDS`, finding
+an endpoint worth fetching at all, and the script-shape rule itself are their
+own subject → **[references/scraping.md](references/scraping.md)**.
 
 ## Declaration shape (iris-declare.yaml)
 

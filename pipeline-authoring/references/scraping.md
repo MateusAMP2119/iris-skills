@@ -1,8 +1,9 @@
-# Scraping: picking a pace, finding an endpoint
+# Scraping: picking a pace, finding an endpoint, shaping the script
 
 Read this when a pipeline declares a `source:` and you must decide *how
-often its script sleeps* and *what URL it points at*. The pace is a number
-in your script — nothing in the engine or the YAML holds it.
+often its script sleeps*, *what URL it points at*, and *what may live inside
+the script at all*. The pace is a number in your script — nothing in the
+engine or the YAML holds it.
 
 ## Choosing a pace
 
@@ -65,3 +66,43 @@ Keep the fetch pipeline dumb and the parsing narrow:
   `depends_on` stages that inherit the fetcher's rhythm.
 - Keep the fetch→transform chain of one site in one lane, so the site's
   stages never contend with each other.
+
+## Shape of the script: one function, one thing
+
+**A script is a single function.** Read top to bottom it is one flat
+routine — imports, constants, the turn loop, the parse, the emit — and
+nothing else. This is a rule of the skill, not a style preference: reject a
+script that breaks it, in review and in authoring.
+
+- **No nested definitions.** A `def`, `class`, `lambda` bound to a name, or
+  closure declared inside another `def` is not allowed. Nesting hides a
+  second unit of work inside the first and makes the turn's control flow
+  unreadable at the exact moment it matters (a stuck run holding a lane).
+- **No helper cabinet either.** A pile of top-level helpers is the same
+  script wearing a disguise. If a step deserves its own name, it deserves
+  its own pipeline.
+- **One thing per script.** A script fetches, *or* it transforms, *or* it
+  publishes. The word "and" appearing in the honest one-line description of
+  what a script does is the split signal — and the split is a new pipeline
+  folder with `depends_on`, never a new function.
+- **Reach outward before reaching inward.** A step that feels too big to
+  inline belongs in the stdlib, in a declared `plugins:` verb, or in a
+  downstream stage. Those are the three exits; a private helper is not one.
+
+The scraper this file is about is therefore exactly one script's worth of
+work — fetch, and emit rows shaped like the source:
+
+```python
+# main.py — fetch SIC's news sitemap, emit article rows. That is all it does.
+import json, sys, time
+CHECK_EVERY_SECONDS = 120
+
+for line in sys.stdin:
+    frame = json.loads(line)
+    ...          # go / row / run / source, handled inline, one level deep
+```
+
+Deduping, enriching, translating, alerting: each is another pipeline reading
+this one's table. That split is what buys per-stage replay, per-stage
+dead-lettering, and a run capture that says which step actually failed —
+all of which a script with private helpers silently gives up.
