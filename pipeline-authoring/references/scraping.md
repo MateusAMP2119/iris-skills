@@ -40,7 +40,8 @@ yours to finish. Decide in the script:
 
 ## Finding the right endpoint for a news source
 
-Never scrape the homepage first. Probe in this order (one curl each):
+Never scrape the homepage *first* — probe in this order (one curl each),
+then check whether what you found is actually complete:
 
 1. `robots.txt` → `Sitemap:` lines. A **news sitemap** (Google News
    requirement, near-universal for professional outlets) updates within
@@ -50,11 +51,46 @@ Never scrape the homepage first. Probe in this order (one curl each):
    `/sitemaps/news.xml`, `/sitemap_news.xml`, `/feed/news/sitemap.xml`.
 3. **RSS/Atom**: `/feed/` (WordPress default), `/rss`. Small, parse-friendly,
    ETag-capable. The standard for small sites.
-4. Homepage HTML: last resort — heavy, JS-rendered, bot-walled (DataDome,
-   Cloudflare). Expect 403s and captchas.
+4. Homepage or section HTML: last for *discovery* — heavy, JS-rendered,
+   bot-walled (DataDome, Cloudflare). Expect 403s and captchas. Last does
+   not mean forbidden: see below.
 
 A source that only yields under a headless browser is a signal to stop and
 ask whether the site should be a source at all.
+
+## When the feed isn't enough: scrape the page
+
+A sitemap or feed is the preferred endpoint, not a complete one. Scrape the
+homepage or a section page when the feed **provably** misses something —
+prove it before you conclude it. Take one window (a few hours) and compare
+the feed's items against what the site itself lists in that window. Two
+distinct gaps, with different answers:
+
+- **Missing items.** The feed is capped (a 10-item RSS on a busy outlet rolls
+  items out between your polls), or a section simply is not in it. The page
+  that lists them *is* the right source now. Give it **its own pipeline**: a
+  pipeline declares one `source.http` and fetches only that, so you cannot
+  swap URL mid-script — a second origin means a second declaration. Join it
+  to the feed's rows on `url` downstream, feed rows winning on conflict.
+- **Missing fields.** Items are all there, but carry only url + title — no
+  `published_at`, truncated summary, no body or author. Those live on the
+  article page, whose URL differs per row, and a per-row URL is not a
+  `source:` at all: `source.http` is one static URL declared ahead of time.
+  Either accept the thinner row, or take it up as a declared plugin verb —
+  do not contort the fetch frame into it.
+
+When you do scrape a page, the discipline is stricter than for a feed:
+
+- **Pace it slower than the feed** — HTML is orders of magnitude heavier per
+  request and far more closely watched.
+- **A persistent 403 means the endpoint is wrong, not the pace.** Go back to
+  the probe list before you go back to the sleep constant.
+- **Parse narrowly and carry lineage** (`source_url`, `fetched_sha`). An HTML
+  parse breaks on a redesign you will not be told about; narrow parsing fails
+  loudly on one field instead of silently mangling every row.
+- **The feed stays the spine.** The page pipeline fills a named gap. When it
+  quietly becomes the primary discovery path, the endpoint choice was wrong
+  from the start — re-probe.
 
 ## Shape of the fetching pipeline
 
